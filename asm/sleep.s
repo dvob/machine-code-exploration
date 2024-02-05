@@ -3,7 +3,16 @@
 .text
 
 sleep:
-    enter $32, $0       # reserve 32 byte for two timespec (man timespec) structs
+    # reserve 32 byte for two timespec (man timespec) structs
+    #    time spec struct looks as follows:
+    #        struct timespec {
+    #             time_t tv_sec;        /* seconds */
+    #             long   tv_nsec;       /* nanoseconds */
+    #         };
+    #
+    #     on a 64bit system time_t and long are both 64bit.
+    #     by enter $32, $0 we subtract 32 bytes (4 * 64bit) from the stack pointer.
+    enter $32, $0       
     movq $0, -8(%rbp)
     movq %rax, -16(%rbp) # seconds of first timespec
     movq $0, -24(%rbp)
