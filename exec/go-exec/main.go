@@ -1,28 +1,37 @@
 package main
 
+/*
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+void call_machine_code(void *code_ptr) {
+    void (*fn)(void) = (void (*)(void))code_ptr;
+    fn();
+}
+*/
+import "C"
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
 
-func main() {
-	// we cant run this code. exit seems to hang in runtime
-	code := []byte{
-		0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00,
-		0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00,
-		0x0f, 0x05,
-	}
+// funcval is Go's internal representation of a function value
+// Copied from runtime/runtime2.go
+// https://github.com/golang/go/blob/a23d1a4ebe5ca1f4964ad51a92d99edf5a95d530/src/runtime/runtime2.go#L179
+type funcval struct {
+	fn uintptr
+}
 
-	// code = []byte{
-	// 	0x48, 0xc7, 0xc0, 0x01, 0x0, 0x0, 0x0, // mov %rax,$0x1
-	// 	0x48, 0xc7, 0xc7, 0x01, 0x0, 0x0, 0x0, // mov %rdi,$0x1
-	// 	0x48, 0xc7, 0xc2, 0x0c, 0x0, 0x0, 0x0, // mov 0x13, %rdx
-	// 	0x48, 0x8d, 0x35, 0x04, 0x0, 0x0, 0x0, // lea 0x4(%rip), %rsi
-	// 	0x0f, 0x05, // syscall
-	// 	0xc3, 0xcc, // ret
-	// 	0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, // Hello_(whitespace)
-	// 	0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x0, 0x0a, // World!
-	// }
+func main() {
+	// Machine code that calls exit_group(33)
+	// exit_group (syscall 231) kills ALL threads, which is required for Go's multi-threaded runtime
+	code := []byte{
+		0x48, 0xc7, 0xc0, 0xe7, 0x00, 0x00, 0x00, // mov $231, %rax (exit_group syscall)
+		0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00, // mov $33, %rdi (exit code)
+		0x0f, 0x05, // syscall
+	}
 
 	mmap, err := syscall.Mmap(-1, 0, len(code), syscall.PROT_READ|syscall.PROT_WRITE|syscall.PROT_EXEC, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS)
 	if err != nil {
@@ -31,8 +40,28 @@ func main() {
 
 	copy(mmap, code)
 
-	fnPtr := (uintptr)(unsafe.Pointer(&mmap))
-	fn := *(*func())(unsafe.Pointer(&fnPtr))
-	fn()
+	direct := true
+	if direct {
+		// METHOD 1: Direct funcval construction (pure Go, no CGO)
+		// Key insight: funcval must be HEAP-allocated, not stack-allocated
 
+		fv := &funcval{
+			fn: uintptr(unsafe.Pointer(&mmap[0])),
+		}
+
+		// Cast pointer-to-pointer to func() and dereference
+		// This works because Go function values are internally pointers to funcval
+
+		fn := *(*func())(unsafe.Pointer(&fv))
+
+		// you can also do that without using the funval struct. its basically the same.
+		// codePtr := new(uintptr)
+		// *codePtr = uintptr(unsafe.Pointer(&mmap[0]))
+		// fn := *(*func())(unsafe.Pointer(&codePtr))
+
+		fmt.Println("Calling via direct funcval...")
+		fn()
+	} else {
+		C.call_machine_code(unsafe.Pointer(&mmap[0]))
+	}
 }
