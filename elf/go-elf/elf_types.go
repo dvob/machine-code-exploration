@@ -2,6 +2,16 @@ package main
 
 //go:generate stringer -type FileType,Class,Data,ProgramHeaderFlag,ProgramHeaderType,SectionHeaderFlag,SectionHeaderType -output string.go
 
+type ELFFile struct {
+	Header         *Header64
+	ProgramHeaders []ProgramHeader64
+	SectionHeaders []SectionHeader64
+}
+
+var MagicBytes = [4]byte{0x7f, 'E', 'L', 'F'}
+
+// ELFIdentifier is the header which is independent from 32bit/64bit (Class),
+// OS (OSABI), and endianess (Data).
 type ELFIdentifier struct {
 	Magic      [4]byte
 	Class      Class // 32bit or 64bit
@@ -15,9 +25,9 @@ type ELFIdentifier struct {
 type Header64 struct {
 	ELFIdentifier
 	Type    FileType
-	Machine uint16
-	Version uint32
-	Entry   uint64
+	Machine uint16 // Machine specifies ISA (e.g. 0x03 for x86)
+	Version uint32 // Version is always set to 1
+	Entry   uint64 // Entry point for executable files
 
 	ProgramHeaderOffset uint64 // where in the file do the program headers start
 	SectionHeaderOffset uint64 // where in the file do the section headers start
