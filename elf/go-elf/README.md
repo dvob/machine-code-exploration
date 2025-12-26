@@ -20,3 +20,11 @@ Write an ELF file:
 ./output.elf
 echo $?
 ```
+
+Dummy compilation:
+```
+./elf-debug compile
+
+./output.elf
+echo $?
+```

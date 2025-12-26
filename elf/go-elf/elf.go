@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"os"
 	"unsafe"
 )
 
@@ -65,19 +64,11 @@ func Read(data []byte) (*File, error) {
 	return file, nil
 }
 
-func Write(_ *File, output string) error {
-	var (
-		virtualAddress = 0x401000
-		code           = []byte{
-			0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // mov $60, %rax
-			0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00, // mov $33, %rdi
-			0x0f, 0x05, // syscall
-		}
-	)
+func Write(virtualAddress uint64, entryPoint uint64, code []byte) []byte {
 	programHeaders := []ProgramHeader64{
 		{
 			Type:           PT_LOAD,
-			Flags:          PF_R | PF_X,
+			Flags:          PF_R | PF_X | PF_W,
 			Offset:         0, // will be set below
 			VirtualAddress: uint64(virtualAddress),
 			FileSize:       uint64(len(code)),
@@ -106,7 +97,7 @@ func Write(_ *File, output string) error {
 			Type:                     ET_EXEC,
 			Machine:                  0x3e, // AMD x86-64
 			Version:                  1,
-			Entry:                    uint64(virtualAddress),
+			Entry:                    uint64(entryPoint),
 			ProgramHeaderOffset:      uint64(unsafe.Sizeof(Header64{})),
 			SectionHeaderOffset:      0,
 			Flags:                    0,
@@ -121,26 +112,18 @@ func Write(_ *File, output string) error {
 		SectionHeaders: []SectionHeader64{},
 	}
 
-	var byteOrder binary.ByteOrder
-	switch f.Header.Data {
-	case ELFDATA2LSB:
-		byteOrder = binary.LittleEndian
-	case ELFDATA2MSB:
-		byteOrder = binary.BigEndian
-	default:
-		return fmt.Errorf("invalid data type 0x%x", f.Header.Data)
-	}
+	byteOrder := binary.LittleEndian
 
 	buf := &bytes.Buffer{}
 	err := binary.Write(buf, byteOrder, f.Header)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	for _, programHeader := range f.ProgramHeaders {
 		err = binary.Write(buf, byteOrder, programHeader)
 		if err != nil {
-			return err
+			panic(err)
 		}
 	}
 
@@ -150,24 +133,10 @@ func Write(_ *File, output string) error {
 
 	_, err = buf.Write(code)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	outputFile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	_, err = outputFile.Write(buf.Bytes())
-	if err != nil {
-		return err
-	}
-
-	err = outputFile.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return buf.Bytes()
 }
 
 func Print(f *Reader) error {

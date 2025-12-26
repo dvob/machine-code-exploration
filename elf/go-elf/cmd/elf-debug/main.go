@@ -39,16 +39,34 @@ func run() error {
 			return err
 		}
 
-		elfReader := &elf.Reader{elfFile, fileData}
+		elfReader := &elf.Reader{
+			File: elfFile,
+			Data: fileData,
+		}
 		return elf.Print(elfReader)
+
 	case "write":
-		return elf.Write(nil, "output.elf")
+		var (
+			virtualAddress uint64 = 0x401000
+			code                  = []byte{
+				0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // mov $60, %rax
+				0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00, // mov $33, %rdi
+				0x0f, 0x05, // syscall
+			}
+		)
+		elfBinary := elf.Write(virtualAddress, virtualAddress, code)
+		return os.WriteFile("output.elf", elfBinary, 0755)
+
+	case "compile":
+		var (
+			virtualAddress uint64 = 0x401000
+		)
+		entryPoint, code := elf.Compile(virtualAddress)
+
+		elfBinary := elf.Write(virtualAddress, entryPoint, code)
+		return os.WriteFile("output.elf", elfBinary, 0755)
+
 	default:
 		return fmt.Errorf("unknown action '%s'", action)
 	}
-
-	// ph := ProgramHeader64{}
-	// sh := SectionHeader64{}
-	// fmt.Printf("program header size: %d\n", unsafe.Sizeof(ph))
-	// fmt.Printf("section header size: %d\n", unsafe.Sizeof(sh))
 }
