@@ -1,6 +1,6 @@
 package main
 
-//go:generate stringer -type FileType,Class,Data,ProgramHeaderFlag,ProgramHeaderType,SectionHeaderFlag,SectionHeaderType -output string.go
+//go:generate go tool stringer -type FileType,Class,Data,ProgramHeaderFlag,ProgramHeaderType,SectionHeaderFlag,SectionHeaderType,SymbolType,SymbolBinding,SymbolVisibility -output string.go
 
 // ELFFile combines the various information a ELF file could contain. But this
 // struct can't be read using binary.Read as only the header is guaranteed be
@@ -316,8 +316,8 @@ func (s Symbol64) SymbolType() SymbolType {
 	return SymbolType(s.Info & 0xf)
 }
 
-func (s Symbol64) SymbolVisibility() SymbolVisbility {
-	return SymbolVisbility(s.Other & 0x3)
+func (s Symbol64) SymbolVisibility() SymbolVisibility {
+	return SymbolVisibility(s.Other & 0x3)
 }
 
 type SymbolType uint8
@@ -348,13 +348,13 @@ const (
 	STB_HIPROC SymbolBinding = 15 // Processor-specific semantics
 )
 
-type SymbolVisbility uint8
+type SymbolVisibility uint8
 
 const (
-	STV_DEFAULT   SymbolVisbility = 0
-	STV_INTERNAL  SymbolVisbility = 1
-	STV_HIDDEN    SymbolVisbility = 2
-	STV_PROTECTED SymbolVisbility = 3
+	STV_DEFAULT   SymbolVisibility = 0
+	STV_INTERNAL  SymbolVisibility = 1
+	STV_HIDDEN    SymbolVisibility = 2
+	STV_PROTECTED SymbolVisibility = 3
 )
 
 // NewSymbolInfo combines binding and type into Info byte

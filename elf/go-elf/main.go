@@ -10,6 +10,9 @@ import (
 	"unsafe"
 )
 
+// we just could use debug/elf but we want to explore stuff ourself
+var _ = elf.Open
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -43,8 +46,7 @@ func run() error {
 		}
 
 		elfReader := &ELFReader{elf, fileData}
-		printElf(elfReader)
-		return nil
+		return printElf(elfReader)
 	case "write":
 		return writeElf(nil, "output.elf")
 	default:
@@ -256,7 +258,7 @@ func printElf(f *ELFReader) error {
 		fmt.Printf("align: 0x%x\n", p.Align)
 		fmt.Println()
 	}
-	printSection := func(s SectionHeader64) error {
+	printSection := func(index int, s SectionHeader64) error {
 		// print name if shstrtab is available
 		fmt.Printf("type: %v\n", s.Type)
 		fmt.Printf("flags: %v\n", s.Flags)
@@ -267,17 +269,43 @@ func printElf(f *ELFReader) error {
 		fmt.Printf("info: %v\n", s.Info)
 		fmt.Printf("addr align: 0x%x\n", s.AddressAlign)
 		fmt.Printf("ent size: %v\n", s.EntSize)
-		if s.Type == SHT_STRTAB {
+		switch s.Type {
+		case SHT_STRTAB:
 			if s.Size == 0 {
 				fmt.Printf("strings: no strings in table\n")
 			}
-			strings, err := f.readStringTable(int(s.Offset), int(s.Size))
+			strings, err := f.readStringTable(index)
 			fmt.Printf("strings: %v\n", s.EntSize)
 			if err != nil {
 				return err
 			}
 			for _, str := range strings {
 				fmt.Printf("  - '%s'\n", str)
+			}
+		case SHT_DYNSYM, SHT_SYMTAB:
+			symbols, err := f.readSymbolTable(index)
+			if err != nil {
+				return err
+			}
+
+			if len(symbols) == 0 {
+				fmt.Println("symbols: no symbols")
+
+			}
+			fmt.Println("symbols:")
+			for i, symbol := range symbols {
+				symbolName, err := f.readString(int(s.Link), int(symbol.Name))
+				if err != nil {
+					return err
+				}
+				fmt.Printf("  - index: %d\n", i)
+				fmt.Printf("    name: %s\n", symbolName)
+				fmt.Printf("    type: %s\n", symbol.SymbolType())
+				fmt.Printf("    value: %d\n", symbol.Value)
+				fmt.Printf("    size: %d\n", symbol.Size)
+				fmt.Printf("    visibility: %s\n", symbol.SymbolVisibility())
+				fmt.Printf("    binding: %s\n", symbol.SymbolBinding())
+				fmt.Printf("    section header index: %d\n", symbol.SectionHeaderIndex)
 			}
 		}
 		fmt.Println()
@@ -301,37 +329,11 @@ func printElf(f *ELFReader) error {
 		if sectionName != "" {
 			fmt.Printf("name: %v\n", sectionName)
 		}
-		printSection(sh)
+		err = printSection(i, sh)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println()
-	return nil
-}
-
-func run1() error {
-	flag.Parse()
-	if flag.NArg() < 1 {
-		return fmt.Errorf("usage: %s ELF-FILE", os.Args[0])
-	}
-
-	fileName := flag.Arg(0)
-
-	elfFile, err := elf.Open(fileName)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("file header")
-	fmt.Println(elfFile.FileHeader)
-
-	fmt.Println("sections")
-	for _, section := range elfFile.Sections {
-		fmt.Println(section)
-	}
-
-	fmt.Println("progs")
-	for _, prog := range elfFile.Progs {
-		fmt.Println(prog)
-	}
-
 	return nil
 }
