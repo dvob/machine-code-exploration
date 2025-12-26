@@ -42,7 +42,8 @@ func run() error {
 			return err
 		}
 
-		printElf(elf)
+		elfReader := &ELFReader{elf, fileData}
+		printElf(elfReader)
 		return nil
 	case "write":
 		return writeElf(nil, "output.elf")
@@ -218,7 +219,7 @@ func writeElf(_ *ELFFile, output string) error {
 	return nil
 }
 
-func printElf(f *ELFFile) {
+func printElf(f *ELFReader) error {
 	printHeader := func(h *Header64) {
 		fmt.Printf("class: %s\n", h.Class)
 		fmt.Printf("data: %s\n", h.Data)
@@ -255,8 +256,12 @@ func printElf(f *ELFFile) {
 		fmt.Printf("align: 0x%x\n", p.Align)
 		fmt.Println()
 	}
-	printSection := func(s SectionHeader64) {
-		fmt.Printf("name: %v\n", s.Name)
+	printSection := func(s SectionHeader64) error {
+		name, err := f.readString(int(f.Header.SectionHeaderStringIndex), int(s.Name))
+		if err != nil {
+			return err
+		}
+		fmt.Printf("name: %v\n", name)
 		fmt.Printf("type: %v\n", s.Type)
 		fmt.Printf("flags: %v\n", s.Flags)
 		fmt.Printf("addr: 0x%x\n", s.Address)
@@ -267,6 +272,7 @@ func printElf(f *ELFFile) {
 		fmt.Printf("addr align: 0x%x\n", s.AddressAlign)
 		fmt.Printf("ent size: %v\n", s.EntSize)
 		fmt.Println()
+		return nil
 	}
 
 	printHeader(f.Header)
@@ -280,6 +286,7 @@ func printElf(f *ELFFile) {
 		printSection(sh)
 	}
 	fmt.Println()
+	return nil
 }
 
 func run1() error {
