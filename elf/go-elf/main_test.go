@@ -15,17 +15,13 @@ func Test_writeElf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// stdOut := &bytes.Buffer{}
-	// stdErr := &bytes.Buffer{}
 	cmd := exec.Command(outputPath)
-	// cmd.Stdout = stdOut
-	// cmd.Stderr = stdErr
 
 	_, err = cmd.Output()
 	exitErr := &exec.ExitError{}
 	if errors.As(err, &exitErr) {
 		if exitErr.ExitCode() != 33 {
-			t.Fatalf("expected exit code 33 got %d", exitErr.ExitCode())
+			t.Fatalf("expected exit code 33 got %d: %s", exitErr.ExitCode(), err)
 		}
 	} else if err == nil {
 		t.Fatal("expected error code 33")

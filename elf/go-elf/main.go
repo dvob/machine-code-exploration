@@ -113,129 +113,33 @@ func readElf(data []byte) (*ELFFile, error) {
 	return file, nil
 }
 
-func writeSmallElf(f *ELFFile, output string) error {
-	var (
-		virtualAddress = 0x401000
-		usePadding     = false
-		code           = []byte{
-			0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00,
-			0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00,
-			0x0f, 0x05,
-		}
-	)
-	f = &ELFFile{
-		Header: &Header64{
-			ELFIdentifier: ELFIdentifier{
-				Magic:      MagicBytes,
-				Class:      ELFCLASS64,
-				Data:       ELFDATA2LSB,
-				Version:    1,
-				OSABI:      0x03, // Linux
-				ABIVersion: 0,
-				Padding:    [7]byte{},
-			},
-			Type:                     ET_EXEC,
-			Machine:                  0x3e, // AMD x86-64
-			Version:                  1,
-			Entry:                    uint64(virtualAddress) + uint64(unsafe.Sizeof(Header64{})+unsafe.Sizeof(ProgramHeader64{})),
-			ProgramHeaderOffset:      uint64(unsafe.Sizeof(Header64{})),
-			SectionHeaderOffset:      0,
-			Flags:                    0,
-			EhSize:                   uint16(unsafe.Sizeof(Header64{})),
-			ProgramHeaderSize:        uint16(unsafe.Sizeof(ProgramHeader64{})),
-			ProgramHeaderCount:       1,
-			SectionHeaderSize:        0,
-			SectionHeaderCount:       0,
-			SectionHeaderStringIndex: 0,
-		},
-		ProgramHeaders: []ProgramHeader64{
-			{
-				Type:  PT_LOAD,
-				Flags: PF_R | PF_X,
-
-				Offset:         0,                      //uint64(unsafe.Sizeof(Header64{}) + unsafe.Sizeof(ProgramHeader64{})),
-				VirtualAddress: uint64(virtualAddress), //VADDR + uint64(unsafe.Sizeof(Header64{})+unsafe.Sizeof(ProgramHeader64{})),
-				FileSize:       uint64(len(code)),
-				MemorySize:     uint64(len(code)),
-				Align:          4096,
-
-				// this is what worked and is done by normal compilers
-				// Offset:         4096, //uint64(unsafe.Sizeof(Header64{}) + unsafe.Sizeof(ProgramHeader64{})),
-				// VirtualAddress: 0x401000,
-				// FileSize:       uint64(len(code)),
-				// MemorySize:     uint64(len(code)),
-				// Align:          0,
-			},
-		},
-		SectionHeaders: []SectionHeader64{},
-	}
-
-	var byteOrder binary.ByteOrder
-	switch f.Header.Data {
-	case ELFDATA2LSB:
-		byteOrder = binary.LittleEndian
-	case ELFDATA2MSB:
-		byteOrder = binary.BigEndian
-	default:
-		return fmt.Errorf("invalid data type 0x%x", f.Header.Data)
-	}
-
-	buf := &bytes.Buffer{}
-	err := binary.Write(buf, byteOrder, f.Header)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("header size:", buf.Len())
-
-	for _, programHeader := range f.ProgramHeaders {
-		err = binary.Write(buf, byteOrder, programHeader)
-		if err != nil {
-			return err
-		}
-		fmt.Println("ph header size:", buf.Len())
-	}
-
-	if usePadding {
-		padding := 4096 - buf.Len()
-		for i := 0; i < padding; i++ {
-			buf.WriteByte(0)
-		}
-	}
-
-	_, err = buf.Write(code)
-	if err != nil {
-		return err
-	}
-
-	outputFile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	_, err = outputFile.Write(buf.Bytes())
-	if err != nil {
-		return err
-	}
-
-	err = outputFile.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func writeElf(_ *ELFFile, output string) error {
 	var (
 		virtualAddress = 0x401000
-		usePadding     = false
 		code           = []byte{
-
 			0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // mov $60, %rax
 			0x48, 0xc7, 0xc7, 0x21, 0x00, 0x00, 0x00, // mov $33, %rdi
 			0x0f, 0x05, // syscall
 		}
 	)
+	programHeaders := []ProgramHeader64{
+		{
+			Type:           PT_LOAD,
+			Flags:          PF_R | PF_X,
+			Offset:         0, // will be set below
+			VirtualAddress: uint64(virtualAddress),
+			FileSize:       uint64(len(code)),
+			MemorySize:     uint64(len(code)),
+			Align:          0x1000,
+		},
+	}
+
+	headerSize := uint64(unsafe.Sizeof(Header64{}) + uintptr(len(programHeaders))*unsafe.Sizeof(ProgramHeader64{}))
+	padding := (4096 - headerSize%4096) % 4096
+	codeStart := headerSize + padding
+
+	programHeaders[0].Offset = codeStart
+
 	f := &ELFFile{
 		Header: &Header64{
 			ELFIdentifier: ELFIdentifier{
@@ -250,7 +154,7 @@ func writeElf(_ *ELFFile, output string) error {
 			Type:                     ET_EXEC,
 			Machine:                  0x3e, // AMD x86-64
 			Version:                  1,
-			Entry:                    uint64(virtualAddress) + uint64(unsafe.Sizeof(Header64{})+unsafe.Sizeof(ProgramHeader64{})),
+			Entry:                    uint64(virtualAddress),
 			ProgramHeaderOffset:      uint64(unsafe.Sizeof(Header64{})),
 			SectionHeaderOffset:      0,
 			Flags:                    0,
@@ -261,25 +165,7 @@ func writeElf(_ *ELFFile, output string) error {
 			SectionHeaderCount:       0,
 			SectionHeaderStringIndex: 0,
 		},
-		ProgramHeaders: []ProgramHeader64{
-			{
-				Type:  PT_LOAD,
-				Flags: PF_R | PF_X,
-
-				Offset:         0,                      //uint64(unsafe.Sizeof(Header64{}) + unsafe.Sizeof(ProgramHeader64{})),
-				VirtualAddress: uint64(virtualAddress), //VADDR + uint64(unsafe.Sizeof(Header64{})+unsafe.Sizeof(ProgramHeader64{})),
-				FileSize:       uint64(len(code)),
-				MemorySize:     uint64(len(code)),
-				Align:          4096,
-
-				// this is what worked and is done by normal compilers
-				// Offset:         4096, //uint64(unsafe.Sizeof(Header64{}) + unsafe.Sizeof(ProgramHeader64{})),
-				// VirtualAddress: 0x401000,
-				// FileSize:       uint64(len(code)),
-				// MemorySize:     uint64(len(code)),
-				// Align:          0,
-			},
-		},
+		ProgramHeaders: programHeaders,
 		SectionHeaders: []SectionHeader64{},
 	}
 
@@ -299,21 +185,15 @@ func writeElf(_ *ELFFile, output string) error {
 		return err
 	}
 
-	fmt.Println("header size:", buf.Len())
-
 	for _, programHeader := range f.ProgramHeaders {
 		err = binary.Write(buf, byteOrder, programHeader)
 		if err != nil {
 			return err
 		}
-		fmt.Println("ph header size:", buf.Len())
 	}
 
-	if usePadding {
-		padding := 4096 - buf.Len()
-		for i := 0; i < padding; i++ {
-			buf.WriteByte(0)
-		}
+	for i := 0; i < int(padding); i++ {
+		buf.WriteByte(0)
 	}
 
 	_, err = buf.Write(code)
