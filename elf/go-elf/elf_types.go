@@ -228,10 +228,17 @@ const (
 	// See SHT_SYMTAB
 	SHT_DYNSYM
 
-	SHT_LOPROC SectionHeaderType = 0x70000000
-	SHT_HIPROC SectionHeaderType = 0x7fffffff
-	SHT_LOUSER SectionHeaderType = 0x80000000
-	SHT_HIUSER SectionHeaderType = 0xffffffff
+	SHT_INIT_ARRAY    SectionHeaderType = 14
+	SHT_FINI_ARRAY    SectionHeaderType = 15
+	SHT_PREINIT_ARRAY SectionHeaderType = 16
+	SHT_GROUP         SectionHeaderType = 17
+	SHT_SYMTAB_SHNDX  SectionHeaderType = 18
+	SHT_LOOS          SectionHeaderType = 0x60000000
+	SHT_HIOS          SectionHeaderType = 0x6fffffff
+	SHT_LOPROC        SectionHeaderType = 0x70000000
+	SHT_HIPROC        SectionHeaderType = 0x7fffffff
+	SHT_LOUSER        SectionHeaderType = 0x80000000
+	SHT_HIUSER        SectionHeaderType = 0xffffffff
 )
 
 type SectionHeaderFlag uint64
@@ -359,8 +366,23 @@ type SectionIndex uint16
 
 // Special section indices
 const (
-	SHN_UNDEF  SectionIndex = 0      // Undefined section
-	SHN_ABS    SectionIndex = 0xfff1 // Absolute values
-	SHN_COMMON SectionIndex = 0xfff2 // Common block
-	SHN_XINDEX SectionIndex = 0xffff // Escape value for large section index
+	SHN_UNDEF     SectionIndex = 0      // Undefined section
+	SHN_LORESERVE SectionIndex = 0xff00 // Lower bound of reserved indexes
+	SHN_LOPROC    SectionIndex = 0xff00 // Processor-specific semantics
+	SHN_HIPROC    SectionIndex = 0xff1f // Processor-specific semantics
+	SHN_LOOS      SectionIndex = 0xff20 // OS-specific semantics
+	SHN_HIOS      SectionIndex = 0xff3f // OS-specific semantics
+	SHN_ABS       SectionIndex = 0xfff1 // Absolute values
+	SHN_COMMON    SectionIndex = 0xfff2 // Common block
+	SHN_XINDEX    SectionIndex = 0xffff // Escape value for large section index
+	SHN_HIRESERVE SectionIndex = 0xffff // Upper bound of reserved indexes
+)
+
+type SectionGroupFlag uint32
+
+// Section group flags
+const (
+	GRP_COMDAT   SectionGroupFlag = 0x1        // COMDAT group
+	GRP_MASKOS   SectionGroupFlag = 0x0ff00000 // OS-specific semantics
+	GRP_MASKPROC SectionGroupFlag = 0xf0000000 // Processor-specific semantics
 )
