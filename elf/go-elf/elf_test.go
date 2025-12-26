@@ -1,4 +1,4 @@
-package main
+package elf
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 func Test_writeElf(t *testing.T) {
 	tempDir := t.TempDir()
 	outputPath := filepath.Join(tempDir, "output.elf")
-	err := writeElf(nil, outputPath)
+	err := Write(nil, outputPath)
 	if err != nil {
 		t.Fatal(err)
 	}

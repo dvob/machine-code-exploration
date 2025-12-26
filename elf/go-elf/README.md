@@ -1,22 +1,22 @@
 # go-elf
 
-Read and create an ELF file.
+Read and create an ELF files.
 
-Build:
-```shell
-# build a.out
-gcc -nostdlib -static ../../exec/main.s
-
-# build go-elf
-go build
+```
+go build ./cmd/elf-debug
 ```
 
-```shell
-# creates output.elf
-./go-elf a.out
+Print information about an ELF file:
+```
+( cd testdata; gcc main.c )
+
+./elf-debug read testdata/a.out
 ```
 
-```shellp
+Write an ELF file:
+```
+./elf-debug write
+
 ./output.elf
 echo $?
 ```

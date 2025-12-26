@@ -1,11 +1,11 @@
-package main
+package elf
 
 //go:generate go tool stringer -type FileType,Class,Data,ProgramHeaderFlag,ProgramHeaderType,SectionHeaderFlag,SectionHeaderType,SymbolType,SymbolBinding,SymbolVisibility -output string.go
 
-// ELFFile combines the various information a ELF file could contain. But this
+// File combines the various information a ELF file could contain. But this
 // struct can't be read using binary.Read as only the header is guaranteed be
 // be at the beginning.
-type ELFFile struct {
+type File struct {
 	Header         *Header64
 	ProgramHeaders []ProgramHeader64
 	SectionHeaders []SectionHeader64

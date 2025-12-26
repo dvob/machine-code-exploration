@@ -1,65 +1,14 @@
-package main
+package elf
 
 import (
 	"bytes"
-	"debug/elf"
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"os"
 	"unsafe"
 )
 
-// we just could use debug/elf but we want to explore stuff ourself
-var _ = elf.Open
-
-func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	flag.Parse()
-	if flag.NArg() < 1 {
-		return fmt.Errorf("missing action")
-	}
-
-	action := flag.Arg(0)
-	switch action {
-	case "read":
-		if flag.NArg() < 2 {
-			return fmt.Errorf("usage: %s read ELF-FILE", os.Args[0])
-		}
-
-		fileName := flag.Arg(1)
-
-		fileData, err := os.ReadFile(fileName)
-		if err != nil {
-			return err
-		}
-
-		elf, err := readElf(fileData)
-		if err != nil {
-			return err
-		}
-
-		elfReader := &ELFReader{elf, fileData}
-		return printElf(elfReader)
-	case "write":
-		return writeElf(nil, "output.elf")
-	default:
-		return fmt.Errorf("unknown action '%s'", action)
-	}
-
-	// ph := ProgramHeader64{}
-	// sh := SectionHeader64{}
-	// fmt.Printf("program header size: %d\n", unsafe.Sizeof(ph))
-	// fmt.Printf("section header size: %d\n", unsafe.Sizeof(sh))
-}
-
-func readElf(data []byte) (*ELFFile, error) {
+func Read(data []byte) (*File, error) {
 	ident := ELFIdentifier{}
 
 	err := binary.Read(bytes.NewBuffer(data), binary.NativeEndian, &ident)
@@ -87,7 +36,7 @@ func readElf(data []byte) (*ELFFile, error) {
 		return nil, err
 	}
 
-	file := &ELFFile{
+	file := &File{
 		Header:         elfHeader,
 		ProgramHeaders: []ProgramHeader64{},
 		SectionHeaders: []SectionHeader64{},
@@ -116,7 +65,7 @@ func readElf(data []byte) (*ELFFile, error) {
 	return file, nil
 }
 
-func writeElf(_ *ELFFile, output string) error {
+func Write(_ *File, output string) error {
 	var (
 		virtualAddress = 0x401000
 		code           = []byte{
@@ -143,7 +92,7 @@ func writeElf(_ *ELFFile, output string) error {
 
 	programHeaders[0].Offset = codeStart
 
-	f := &ELFFile{
+	f := &File{
 		Header: &Header64{
 			ELFIdentifier: ELFIdentifier{
 				Magic:      MagicBytes,
@@ -221,7 +170,7 @@ func writeElf(_ *ELFFile, output string) error {
 	return nil
 }
 
-func printElf(f *ELFReader) error {
+func Print(f *Reader) error {
 	printHeader := func(h *Header64) {
 		fmt.Printf("class: %s\n", h.Class)
 		fmt.Printf("data: %s\n", h.Data)

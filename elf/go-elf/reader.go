@@ -1,4 +1,4 @@
-package main
+package elf
 
 import (
 	"bytes"
@@ -6,13 +6,13 @@ import (
 	"fmt"
 )
 
-type ELFReader struct {
-	*ELFFile
+type Reader struct {
+	*File
 	Data []byte
 }
 
 // readString reads a string from a string table
-func (er *ELFReader) readString(sectionHeaderIndex int, stringIndex int) (string, error) {
+func (er *Reader) readString(sectionHeaderIndex int, stringIndex int) (string, error) {
 	if sectionHeaderIndex > (len(er.SectionHeaders) - 1) {
 		return "", fmt.Errorf("section header index too high")
 	}
@@ -36,7 +36,7 @@ func (er *ELFReader) readString(sectionHeaderIndex int, stringIndex int) (string
 	return string(before), nil
 }
 
-func (er *ELFReader) readStringTable(sectionHeaderIndex int) ([][]byte, error) {
+func (er *Reader) readStringTable(sectionHeaderIndex int) ([][]byte, error) {
 	if sectionHeaderIndex > (len(er.SectionHeaders) - 1) {
 		return nil, fmt.Errorf("section header index too high")
 	}
@@ -68,7 +68,7 @@ func (er *ELFReader) readStringTable(sectionHeaderIndex int) ([][]byte, error) {
 	return bytes.Split(data, []byte{0x0}), nil
 }
 
-func (er *ELFReader) readSectionName(sectionIndex int) (string, error) {
+func (er *Reader) readSectionName(sectionIndex int) (string, error) {
 	if er.Header.SectionHeaderStringIndex == 0 {
 		return "", nil
 	}
@@ -80,7 +80,7 @@ func (er *ELFReader) readSectionName(sectionIndex int) (string, error) {
 	return er.readString(int(er.Header.SectionHeaderStringIndex), int(er.SectionHeaders[sectionIndex].Name))
 }
 
-func (er *ELFReader) sectionIndexByName(sectionName string) (int, bool) {
+func (er *Reader) sectionIndexByName(sectionName string) (int, bool) {
 	for i := range er.SectionHeaders {
 		currentSectionName, _ := er.readSectionName(i)
 		if currentSectionName != "" && currentSectionName == sectionName {
@@ -90,7 +90,7 @@ func (er *ELFReader) sectionIndexByName(sectionName string) (int, bool) {
 	return 0, false
 }
 
-func (er *ELFReader) readSymbols() ([]Symbol64, error) {
+func (er *Reader) readSymbols() ([]Symbol64, error) {
 	sectionName := ".symtab"
 	index, ok := er.sectionIndexByName(sectionName)
 	if !ok {
@@ -99,7 +99,7 @@ func (er *ELFReader) readSymbols() ([]Symbol64, error) {
 	return er.readSymbolTable(index)
 }
 
-func (er *ELFReader) readDynSymbols() ([]Symbol64, error) {
+func (er *Reader) readDynSymbols() ([]Symbol64, error) {
 	sectionName := ".dyntab"
 	index, ok := er.sectionIndexByName(sectionName)
 	if !ok {
@@ -108,7 +108,7 @@ func (er *ELFReader) readDynSymbols() ([]Symbol64, error) {
 	return er.readSymbolTable(index)
 }
 
-func (er *ELFReader) readSymbolTable(sectionHeaderIndex int) ([]Symbol64, error) {
+func (er *Reader) readSymbolTable(sectionHeaderIndex int) ([]Symbol64, error) {
 
 	if sectionHeaderIndex > (len(er.SectionHeaders) - 1) {
 		return nil, fmt.Errorf("section header index too high")
