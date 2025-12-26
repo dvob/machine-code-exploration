@@ -2,6 +2,9 @@ package main
 
 //go:generate stringer -type FileType,Class,Data,ProgramHeaderFlag,ProgramHeaderType,SectionHeaderFlag,SectionHeaderType -output string.go
 
+// ELFFile combines the various information a ELF file could contain. But this
+// struct can't be read using binary.Read as only the header is guaranteed be
+// be at the beginning.
 type ELFFile struct {
 	Header         *Header64
 	ProgramHeaders []ProgramHeader64
@@ -104,6 +107,14 @@ const (
 	PT_LOPROC ProgramHeaderType = 0x70000000
 	PT_HIPROC ProgramHeaderType = 0x7fffffff
 )
+
+// NewSectionHeaderTable64 returns a section header table with the special null
+// entry at the beginning
+func NewSectionHeaderTable64() []SectionHeader64 {
+	return []SectionHeader64{
+		{},
+	}
+}
 
 // SectionHeader64 see chapter 4 - 10 in System V Application Binary Interface
 type SectionHeader64 struct {
@@ -240,4 +251,116 @@ const (
 	SHF_MASKPROC         SectionHeaderFlag = 0xF0000000 // Processor-specific
 	SHF_ORDERED          SectionHeaderFlag = 0x4000000  // Special ordering requirement (Solaris)
 	SHF_EXCLUDE          SectionHeaderFlag = 0x8000000  // Section is excluded unless referenced or allocated (Solaris)
+)
+
+// NewSymbolTable64 creates a symbol table with the first entry set to the specail null value
+func NewSymbolTable64() []Symbol64 {
+	return []Symbol64{
+		{},
+	}
+}
+
+// Symbol64 represents a 64-bit ELF symbol table entry.
+// NOTE: Field order differs from ELF32! In ELF64, the smaller fields (Info,
+// Other, SectionHeaderIndex) come before Value/Size for proper 8-byte alignment.
+type Symbol64 struct {
+	// Name holds an index into the object file’s symbol string table. The
+	// table (section index) is stored in the symbol tables sections Link
+	// field. Usually it is .strtab for .symtab and .dynstr for .dyntab. If
+	// the value is zero the symbol table entry has no name.
+	Name uint32
+
+	// Info specifies the symbol's type and binding attributes:
+	//   - Binding: the upper 4 bits. See SymbolBinding
+	//   - Type: lower 4 bits. See SymbolType
+	Info uint8
+
+	// Other originally had no special meaning. Latter its 3 lower bits got used for visibility.
+	Other uint8
+
+	// SectionHeaderIndex indicates which section this symbol is defined in:
+	//   - SHN_UNDEF (0): Undefined symbol (needs to be resolved by linker)
+	//   - SHN_ABS (0xfff1): Absolute value (Value is not affected by relocation)
+	//   - SHN_COMMON (0xfff2): Common block (unallocated data, like extern int x;)
+	//   - 1..n: Index into section header table
+	//
+	// Example: SectionHeaderIndex = 1 means defined in sections[1] (often .text)
+	SectionHeaderIndex uint16
+
+	// Value holds the symbol's value, meaning depends on context:
+	//   - Relocatable files (ET_REL): offset from beginning of section
+	//   - Executable/shared (ET_EXEC/ET_DYN): virtual address
+	Value uint64
+
+	// Size gives the associated object's size in bytes:
+	//   - Functions: number of bytes of code
+	//   - Variables: number of bytes of data
+	//   - 0: no size or unknown size
+	//
+	// Example: A 4-byte int variable has Size = 4
+	Size uint64
+}
+
+func (s Symbol64) SymbolBinding() SymbolBinding {
+	return SymbolBinding(s.Info >> 4)
+}
+
+func (s Symbol64) SymbolType() SymbolType {
+	return SymbolType(s.Info & 0xf)
+}
+
+func (s Symbol64) SymbolVisibility() SymbolVisbility {
+	return SymbolVisbility(s.Other & 0x3)
+}
+
+type SymbolType uint8
+
+const (
+	STT_NOTYPE  SymbolType = 0  // Symbol type not specified
+	STT_OBJECT  SymbolType = 1  // Data object (variable)
+	STT_FUNC    SymbolType = 2  // Function or executable code
+	STT_SECTION SymbolType = 3  // Section symbol (used for relocations)
+	STT_FILE    SymbolType = 4  // Source file name symbol
+	STT_COMMON  SymbolType = 5  // Uninitialized common block
+	STT_TLS     SymbolType = 6  // Thread-Local Storage entity
+	STT_LOOS    SymbolType = 10 // OS-specific semantics
+	STT_HIOS    SymbolType = 12 // OS-specific semantics
+	STT_LOPROC  SymbolType = 13 // Processor-specific semantics
+	STT_HIPROC  SymbolType = 15 // Processor-specific semantics
+)
+
+type SymbolBinding uint8
+
+const (
+	STB_LOCAL  SymbolBinding = 0  // Local symbol (not visible outside object file)
+	STB_GLOBAL SymbolBinding = 1  // Global symbol (visible to all object files)
+	STB_WEAK   SymbolBinding = 2  // Weak symbol (like global but lower precedence)
+	STB_LOOS   SymbolBinding = 10 // OS-specific semantics
+	STB_HIOS   SymbolBinding = 12 // OS-specific semantics
+	STB_LOPROC SymbolBinding = 13 // Processor-specific semantics
+	STB_HIPROC SymbolBinding = 15 // Processor-specific semantics
+)
+
+type SymbolVisbility uint8
+
+const (
+	STV_DEFAULT   SymbolVisbility = 0
+	STV_INTERNAL  SymbolVisbility = 1
+	STV_HIDDEN    SymbolVisbility = 2
+	STV_PROTECTED SymbolVisbility = 3
+)
+
+// NewSymbolInfo combines binding and type into Info byte
+func NewSymbolInfo(binding SymbolBinding, symbolType SymbolType) uint8 {
+	return (uint8(binding) << 4) | (uint8(symbolType) & 0xf)
+}
+
+type SectionIndex uint16
+
+// Special section indices
+const (
+	SHN_UNDEF  SectionIndex = 0      // Undefined section
+	SHN_ABS    SectionIndex = 0xfff1 // Absolute values
+	SHN_COMMON SectionIndex = 0xfff2 // Common block
+	SHN_XINDEX SectionIndex = 0xffff // Escape value for large section index
 )

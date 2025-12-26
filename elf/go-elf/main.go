@@ -257,11 +257,7 @@ func printElf(f *ELFReader) error {
 		fmt.Println()
 	}
 	printSection := func(s SectionHeader64) error {
-		name, err := f.readString(int(f.Header.SectionHeaderStringIndex), int(s.Name))
-		if err != nil {
-			return err
-		}
-		fmt.Printf("name: %v\n", name)
+		// print name if shstrtab is available
 		fmt.Printf("type: %v\n", s.Type)
 		fmt.Printf("flags: %v\n", s.Flags)
 		fmt.Printf("addr: 0x%x\n", s.Address)
@@ -271,18 +267,40 @@ func printElf(f *ELFReader) error {
 		fmt.Printf("info: %v\n", s.Info)
 		fmt.Printf("addr align: 0x%x\n", s.AddressAlign)
 		fmt.Printf("ent size: %v\n", s.EntSize)
+		if s.Type == SHT_STRTAB {
+			if s.Size == 0 {
+				fmt.Printf("strings: no strings in table\n")
+			}
+			strings, err := f.readStringTable(int(s.Offset), int(s.Size))
+			fmt.Printf("strings: %v\n", s.EntSize)
+			if err != nil {
+				return err
+			}
+			for _, str := range strings {
+				fmt.Printf("  - '%s'\n", str)
+			}
+		}
 		fmt.Println()
 		return nil
 	}
 
 	printHeader(f.Header)
 	fmt.Printf("programm headers: %d\n", len(f.ProgramHeaders))
-	for _, ph := range f.ProgramHeaders {
+	for i, ph := range f.ProgramHeaders {
+		fmt.Printf("index: %d\n", i)
 		printProgram(ph)
 	}
 	fmt.Println()
 	fmt.Printf("section headers: %d\n", len(f.SectionHeaders))
-	for _, sh := range f.SectionHeaders {
+	for i, sh := range f.SectionHeaders {
+		fmt.Printf("index: %d\n", i)
+		sectionName, err := f.readSectionName(i)
+		if err != nil {
+			return err
+		}
+		if sectionName != "" {
+			fmt.Printf("name: %v\n", sectionName)
+		}
 		printSection(sh)
 	}
 	fmt.Println()
